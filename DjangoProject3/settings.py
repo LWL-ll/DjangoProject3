@@ -11,6 +11,12 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 from pathlib import Path
+import os
+from dotenv import load_dotenv
+import dj_database_url
+
+# 加载环境变量
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -20,12 +26,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-$^75#&g()wck@(0-s*wh8^13(g7a@v8=$hdhk4apv72mlp^4_f'
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-$^75#&g()wck@(0-s*wh8^13(g7a@v8=$hdhk4apv72mlp^4_f')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'False').lower() in ('true', '1', 'yes')
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
 
 # Application definition
@@ -77,14 +83,20 @@ WSGI_APPLICATION = 'DjangoProject3.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
+# 使用 dj-database-url 自动解析 DATABASE_URL
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'OPTIONS': {
-            'read_default_file': 'my.cnf',
-        },
-    }
+    'default': dj_database_url.parse(
+        os.getenv('DATABASE_URL', f'sqlite:///{BASE_DIR / "db.sqlite3"}')
+    )
 }
+
+# 如果使用纯 SQLite 配置，也可以用下面的方式：
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.sqlite3',
+#         'NAME': BASE_DIR / 'db.sqlite3',
+#     }
+# }
 
 
 # Password validation
@@ -122,18 +134,67 @@ USE_TZ = False
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
-#静态文件加载路径
+# 静态文件加载路径
 STATICFILES_DIRS = [
     BASE_DIR / "static"
- ]
+]
+# 生产环境中 collectstatic 命令收集静态文件的目标目录
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
+# WhiteNoise 配置（用于在生产环境提供静态文件）
+MIDDLEWARE.insert(MIDDLEWARE.index('django.middleware.security.SecurityMiddleware') + 1, 'whitenoise.middleware.WhiteNoiseMiddleware')
+
+# 静态文件缓存控制
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# Email 配置
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_USE_TLS = True
 EMAIL_HOST = 'smtp.qq.com'
 EMAIL_PORT = 587
-EMAIL_HOST_USER = '2273107117@qq.com'
-EMAIL_HOST_PASSWORD = 'xynjlzzrsvrjebbc'
-DEFAULT_FROM_EMAIL = '2273107117@qq.com'
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '2273107117@qq.com')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', 'xynjlzzrsvrjebbc')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', '2273107117@qq.com')
 
 
 LOGIN_URL='/auth/login'
+
+# ========== 安全设置 ==========
+
+# CSRF 设置
+CSRF_COOKIE_SECURE = not DEBUG  # 仅在 HTTPS 下传输 CSRF cookie
+CSRF_COOKIE_HTTPONLY = True  # 防止 JavaScript 访问 CSRF cookie
+CSRF_COOKIE_SAMESITE = 'Lax'  # 防止 CSRF 攻击
+
+# Session 设置
+SESSION_COOKIE_SECURE = not DEBUG  # 仅在 HTTPS 下传输 session cookie
+SESSION_COOKIE_HTTPONLY = True  # 防止 JavaScript 访问 session cookie
+SESSION_COOKIE_SAMESITE = 'Lax'  # 防止 CSRF 攻击
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True  # 浏览器关闭时过期
+
+# XSS 防护
+SECURE_BROWSER_XSS_FILTER = True  # 启用浏览器的 XSS 过滤器
+
+# 点击劫持防护
+SECURE_CONTENT_TYPE_NOSNIFF = True  # 防止 MIME 类型嗅探
+
+# HSTS 设置（仅在生产环境启用）
+if not DEBUG:
+    SECURE_HSTS_SECONDS = 31536000  # 1 年
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    
+    # 确保所有请求都是 HTTPS
+    SECURE_SSL_REDIRECT = True
+
+# 文件上传设置
+FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024  # 5MB
+DATA_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024  # 5MB
+
+# 密码哈希算法
+PASSWORD_HASHERS = [
+    'django.contrib.auth.hashers.Argon2PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
+    'django.contrib.auth.hashers.BCryptSHA256PasswordHasher',
+]
